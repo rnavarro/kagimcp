@@ -1,6 +1,6 @@
 [project]
 name = "kagimcp"
-version = "0.1.5"
+version = "1.0.0rc5"
 authors = [
     {name="Rehan Ali Rana", email="rehan@kagi.com"},
 ]
@@ -8,14 +8,28 @@ description = "Kagi MCP server"
 readme = "README.md"
 requires-python = "==3.12.*"
 dependencies = [
-    "kagiapi~=0.2.1",
-    "mcp[cli]~=1.26.0",
+    "fastmcp~=3.2",
     "pydantic~=2.12.5",
+    "urllib3>=2.1.0,<3.0.0",
+    "python-dateutil>=2.8.2",
+    "typing-extensions>=4.7.1",
 ]
 
 [project.urls]
 Homepage = "https://github.com/kagisearch/kagi-mcp"
 Issues = "https://github.com/kagisearch/kagi-mcp/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/kagimcp", "src/openapi_client"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src/kagimcp",
+    "/src/openapi_client",
+    "/README.md",
+    "/LICENSE",
+    "/pyproject.toml",
+]
 
 [build-system]
 requires = ["hatchling"]
