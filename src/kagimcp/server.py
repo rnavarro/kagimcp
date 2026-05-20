@@ -16,6 +16,8 @@ from openapi_client import (
     SearchRequestExtract,
     SearchRequestFilters,
     SearchRequestLens,
+    SearchRequestPersonalizations,
+    SearchRequestPersonalizationsDomainsInner,
 )
 from openapi_client.exceptions import ApiException
 from fastmcp import FastMCP
@@ -127,6 +129,7 @@ _HIDEABLE_PARAMS: dict[str, set[str]] = {
         "before",
         "file_type",
         "lens_id",
+        "personalizations",
     },
 }
 
@@ -246,6 +249,17 @@ def kagi_search_fetch(
             "and 'file_type'; use those args or 'lens_id', not both."
         ),
     ),
+    personalizations: list[dict[str, str]] | None = Field(
+        default=None,
+        description=(
+            "Inline domain personalization rules to customize ranking. "
+            "Each rule is a dict with 'domain' and 'kind' keys. "
+            "Kind values: 'block' (remove), 'lower' (downrank), 'higher' (uprank), 'pin' (always top). "
+            "Example: [{'domain': 'medium.com', 'kind': 'block'}, {'domain': 'docs.python.org', 'kind': 'higher'}]. "
+            "These apply per-query and do NOT use your account-level personalization settings. "
+            "If omitted and KAGI_DEFAULT_PERSONALIZATIONS is set, those defaults are used instead."
+        ),
+    ),
 ) -> str:
     """Fetch web results for a query using the Kagi Search API. Use for general search and when the user explicitly tells you to 'fetch' results/information. Results are numbered so that a user may refer to a result by a specific number."""
     if not query:
@@ -256,13 +270,16 @@ def kagi_search_fetch(
     if time_relative and (after or before):
         raise ValueError("'time_relative' is mutually exclusive with 'after'/'before'.")
 
+    # Resolve lens_id: explicit arg > env var default
+    resolved_lens_id = lens_id or os.environ.get("KAGI_DEFAULT_LENS_ID") or None
+
     lens_fields = {
         "sites_included": include_domains or None,
         "sites_excluded": exclude_domains or None,
         "time_relative": time_relative,
         "file_type": file_type,
     }
-    if lens_id and any(v is not None for v in lens_fields.values()):
+    if resolved_lens_id and any(v is not None for v in lens_fields.values()):
         raise ValueError(
             "'lens_id' is mutually exclusive with 'include_domains', 'exclude_domains', "
             "'time_relative', and 'file_type' (the server ignores 'lens_id' when any of "
@@ -278,6 +295,28 @@ def kagi_search_fetch(
         SearchRequestFilters(after=after, before=before) if after or before else None
     )
 
+    # Resolve personalizations: explicit arg > env var defaults
+    resolved_pers = personalizations
+    if resolved_pers is None:
+        env_pers = os.environ.get("KAGI_DEFAULT_PERSONALIZATIONS", "").strip()
+        if env_pers:
+            try:
+                resolved_pers = json.loads(env_pers)
+            except json.JSONDecodeError:
+                raise ValueError(
+                    f"KAGI_DEFAULT_PERSONALIZATIONS is not valid JSON: {env_pers[:100]}"
+                )
+
+    pers_obj = None
+    if resolved_pers:
+        domains = [
+            SearchRequestPersonalizationsDomainsInner(
+                domain=r["domain"], kind=r["kind"]
+            )
+            for r in resolved_pers
+        ]
+        pers_obj = SearchRequestPersonalizations(domains=domains)
+
     search_api, _ = _clients_for(_resolve_api_key())
     try:
         response = search_api.search_without_preload_content(
@@ -287,9 +326,10 @@ def kagi_search_fetch(
                 format="markdown",
                 limit=limit,
                 extract=extract,
-                lens_id=lens_id,
+                lens_id=resolved_lens_id,
                 lens=lens,
                 filters=filters,
+                personalizations=pers_obj,
             ),
             _request_timeout=_SEARCH_TIMEOUT,
         )

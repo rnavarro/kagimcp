@@ -35,8 +35,8 @@ class SearchRequestPersonalizationsDomainsInner(BaseModel):
     @field_validator('kind')
     def kind_validate_enum(cls, value):
         """Validates the enum"""
-        if value not in set(['block', 'lower', 'raise', 'pin']):
-            raise ValueError("must be one of enum values ('block', 'lower', 'raise', 'pin')")
+        if value not in set(['block', 'lower', 'higher', 'pin']):
+            raise ValueError("must be one of enum values ('block', 'lower', 'higher', 'pin')")
         return value
 
     model_config = ConfigDict(
